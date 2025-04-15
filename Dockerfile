@@ -22,4 +22,4 @@ RUN pip install --upgrade pip
 RUN pip install -r requirements.txt
 
 # Set default command to run the plot script
-CMD ["python", "visualizations/plot_tsne_3d.py"]
+CMD ["python", "-m visualize.plot_tsne_3d"]

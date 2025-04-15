@@ -4,17 +4,29 @@
 
 ---
 ![demo](Data/github-img/demo.png)
-### [Live Demo](https://yutomorimori.com/vibemap-live-demo.html)
-
+## Demo & Features
+### Configure Parameters - Recalcurate based on the value on real time -
+![demo1](Data/github-img/demo1.png)
+> n the controls page, you can adjust:
+> Max Records (optional): The number of records (or documents) to load.
+> Max t-SNE Iterations (min 250): The number of iterations for t-SNE processing.
+> As you change these values, the estimated processing time is recalculated live.
+### Generate the Plot
+![demo2](Data/github-img/demo2.png)
+> Click the Generate Plot button to begin processing:
+> Countdown timer appear below the estimated time.
+> Once the countdown completes, the interactive 3D plot is generated.
+> The plot is displayed in full screen.
+###  Interact with the Visualization
+![demo3](Data/github-img/demo3.png)
+> Explore the Plot:
+> Use your mouse to rotate, zoom, and pan the 3D scatter plot.
+> Time Navigation: Use the embedded slider to move between different animation frames (time segments).
+> Regenerate the Plot:
+> To adjust parameters or generate a new plot, click the Regenerate the Plot button (located at the top center of the plot page) to reset the view and return to the controls.
+### [Live Demo (Light Webbrowser Version)](https://yutomorimori.com/vibemap-live-demo.html)
+- for Full version install over DockerHub or follow the Setup below
 ---
-
-## 🧰 Features
-
-- Ingest tweets from CSV into MongoDB
-- Compute OpenAI embeddings for text
-- Filter by username & timestamp in 3D
-- Visualize clustered embeddings with t-SNE + KMeans
-- Caches dimensionality results locally
 
 ---
 
@@ -99,22 +111,41 @@ python -m preprocess.assign_emotins
 ```
 - Creates new collection that contains tweets and assigned emotions on MongoDB tha will be used on tsne
 
-### Step 5: Launch Visualization
+### Step 5 a: Launch Visualization
 ```bash
-python plot_tsne_3d.py
+python -m visualize.plot_tsne_3d
+```
+- Loads embeddings and metadata
+- Runs PCA + t-SNE
+- Launches browser with interactive Dash view
+
+####  Features
+- `Data Loading & Preprocessing`: Connects to a MongoDB database to load tweets (or documents) with high-dimensional embeddings. The data is preprocessed using PCA and t‑SNE for effective dimensionality reduction before visualization.
+- `Dropdown`: Filter the visualization by username using a dropdown menu, making it easy to explore data for individual users.
+- `Estimated Processing Time`:
+The application calculates an estimated processing time using the formula computed = ceil((limit / 10000) * (max_itr / 5)).
+As you adjust the input parameters, the estimated time is dynamically updated and displayed. When you generate the plot, a countdown timer and a loading spinner appear to simulate processing, and if the countdown reaches zero, a message notifies you that finalizing the plot may take additional time.
+- `Regenerating the plot`:On the plot view, a "Regenerate the Plot" button is provided at the top center. Clicking this button resets the interface, bringing you back to the controls page so you can adjust parameters, recalculate the estimated processing time, and generate a new visualization.
+- `Dropdown`: filter by `username`
+- `Slider`: filter by `tweets_time`
+- `Hover`: view tweet content, t-SNE info, and cluster
+- `Clusters`: 1-Nearest Neighbor method. with 10 color-coded groups
+### Step 5 b: Launch Visualization **(light version)**
+```bash
+python -m visualize.plotly_tsne_3d
 ```
 - Loads embeddings and metadata
 - Runs PCA + t-SNE
 - Launches browser with interactive Plotly view
-
----
-
-## 🖼 Visualization Features
+####  Features
 
 - `Dropdown`: filter by `username`
 - `Slider`: filter by `tweets_time`
 - `Hover`: view tweet content, t-SNE info, and cluster
 - `Clusters`: 1-Nearest Neighbor method. with 10 color-coded groups
+
+---
+
 
 ---
 
@@ -129,7 +160,8 @@ VibeMap/
 │
 ├── visualizations/                   #  Scripts for plotting and exploring embeddings
 │   ├── __init.py__                   #   - Marks this as a Python package (may be empty or setup logic)
-│   └── plot_tsne_3d.py                #   Plots embeddings interactively ( 3D, Plotly using t-sne and pca)
+│   ├── ploty_tsne_3d.py               #   Plots embeddings interactively ( 3D, Plotly using t-sne and pca)
+│   └── plot_tsne_3d.py                #   Plots embeddings interactively using Dash full version
 │
 ├── Data/                             #  Raw and generated data used in the pipeline
 │   ├── document/tweets.csv           #   - Original dataset with tweet texts or metadata
@@ -150,7 +182,6 @@ VibeMap/
 ---
 
 ---
-
 ## MongoDB Document Example
 ```bash
 _id:67fddaf77044318b3836161b
@@ -165,10 +196,13 @@ emotion_details:
     EMOTION_LABELS:"Frustrated"
     EMOTION_COLOR:"#FF8C00"
 ```
+
+
 ## 🐳 Docker Support
 ### Pull
+```
 docker pull yutomori/vibemap:latest
-
+```
 
 ### Build and Run
 ```bash
@@ -177,10 +211,10 @@ docker build -t vibemap .
 docker run --rm vibemap
 ```
 
-> Make sure MongoDB is running and reachable from the container.
+- Make sure MongoDB is running and reachable from the container.
 
 ---
 
 ## 👤 Author
-Created by [Yuto Mori](https://yutomorimori.com)  
+Created by [Yuto Mori @ Micelytech](https://yutomorimori.com)  
 

@@ -8,4 +8,4 @@ services:
     container_name: vibemap-app
     environment:
       - MONGO_URI=mongodb://host.docker.internal:27017/vibemap_db
-    command: python visualizations/plot_tsne_3d.py
+    command: python -m visualize.plot_tsne_3d

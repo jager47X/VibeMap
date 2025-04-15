@@ -7,8 +7,7 @@ plotly
 # Dash for interactive filtering and UI
 dash
 dash-bootstrap-components
-# For json file
-ijson
+
 # For fallback preprocessing or alternative CPU t-SNE
 scikit-learn
 pymongo
