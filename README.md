@@ -201,7 +201,7 @@ emotion_details:
 ## 🐳 Docker Support
 ### Pull
 ```
-docker pull yutomori/vibemap:latest
+docker pull micelytech/vibemap:latest
 ```
 
 ### Build and Run
