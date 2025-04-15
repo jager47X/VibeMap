@@ -45,7 +45,7 @@ def compute_tsne(embeddings, max_itr_input,random_state=42):
     reduced = pca.fit_transform(embeddings)
 
     logger.info("Running t-SNE...")
-    tsne = TSNE(n_components=3, perplexity=30, n_iter=max_itr_input, init='pca', random_state=random_state, verbose=2)
+    tsne = TSNE(n_components=3, perplexity=30, max_itr_iter=max_itr_input, init='pca', random_state=random_state, verbose=2)
     return tsne.fit_transform(reduced)
 
 
