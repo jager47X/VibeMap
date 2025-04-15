@@ -204,6 +204,10 @@ emotion_details:
 docker pull micelytech/vibemap:latest
 ```
 
+### Run
+```
+docker run -it micelytech/vibemap:latest
+```
 ### Build and Run
 ```bash
 cd docker
