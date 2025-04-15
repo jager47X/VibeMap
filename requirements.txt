@@ -1,0 +1,22 @@
+# Core data and visualization
+numpy
+pandas
+plotly
+
+
+# Dash for interactive filtering and UI
+dash
+dash-bootstrap-components
+# For json file
+ijson
+# For fallback preprocessing or alternative CPU t-SNE
+scikit-learn
+pymongo
+sentence_transformers
+# RAPIDS cuML and CuPy (GPU support, installed via conda)
+# These are listed as comments because pip installation is not supported directly.
+# You MUST install them via conda:
+# conda install -c rapidsai -c nvidia -c conda-forge \
+#     cuml=22.12 cupy cudatoolkit=11.2 python=3.10
+
+

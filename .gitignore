@@ -3,6 +3,12 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# too large
+Data/k-means
+Data/document
+#html
+Data/visualization_outputs
+
 # C extensions
 *.so
 
@@ -116,7 +122,8 @@ ipython_config.py
 .pdm.toml
 .pdm-python
 .pdm-build/
-
+# unwanted
+docker/
 # PEP 582; used by e.g. github.com/David-OConnor/pyflow and github.com/pdm-project/pdm
 __pypackages__/
 
@@ -135,7 +142,7 @@ venv/
 ENV/
 env.bak/
 venv.bak/
-
+.venv310/
 # Spyder project settings
 .spyderproject
 .spyproject
