@@ -5,15 +5,6 @@
 ---
 ![demo](Data/github-img/demo.png)
 ### [Live Demo](https://yutomorimori.com/vibemap-live-demo.html)
-## 🔁 Pipeline Overview
-
-```mermaid
-flowchart LR
-    A[CSV File] --> B[MongoDB (tweets_collection)]
-    B --> C[Add Embeddings with intfloat/e5-small-v2 ]
-    C --> D[t-SNE + KMeans]
-    D --> E[3D Plotly Visualization (HTML)]
-```
 
 ---
 
