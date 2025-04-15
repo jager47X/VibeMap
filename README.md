@@ -3,22 +3,22 @@
 **VibeMap** This project visualizes high-dimensional tweet embeddings using t-SNE, 1-Nearest Neighbor clustering using 10 emotional level, and interactive Plotly 3D scatter plots. It enables users to explore tweet data by username and time through dropdown filters and a time-range slider.    
 
 ---
-![demo](Data/github-img/demo.png)
+![demo](Data/assets/logo.png)
 ## Demo & Features
 ### Configure Parameters - Recalcurate based on the value on real time -
-![demo1](Data/github-img/demo1.png)
+![demo1](Data/assets/demo1.png)
 > n the controls page, you can adjust:
 > Max Records (optional): The number of records (or documents) to load.
 > Max t-SNE Iterations (min 250): The number of iterations for t-SNE processing.
 > As you change these values, the estimated processing time is recalculated live.
 ### Generate the Plot
-![demo2](Data/github-img/demo2.png)
+![demo2](Data/assets/demo2.png)
 > Click the Generate Plot button to begin processing:
 > Countdown timer appear below the estimated time.
 > Once the countdown completes, the interactive 3D plot is generated.
 > The plot is displayed in full screen.
 ###  Interact with the Visualization
-![demo3](Data/github-img/demo3.png)
+![demo3](Data/assets/demo3.png)
 > Explore the Plot:
 > Use your mouse to rotate, zoom, and pan the 3D scatter plot.
 > Time Navigation: Use the embedded slider to move between different animation frames (time segments).
@@ -165,7 +165,7 @@ VibeMap/
 │
 ├── Data/                             #  Raw and generated data used in the pipeline
 │   ├── document/tweets.csv           #   - Original dataset with tweet texts or metadata
-│   ├── github-img/demo.png           #   - Image used in README or docs (e.g., for GitHub preview)
+│   ├── assets/logo.png           #   - Image used in README or docs (e.g., for GitHub preview)
 │   └── visualizations_outputs/       #   - Auto-generated HTML or plots from t-SNE/K-Means results
 │
 ├── docker/                           #  Docker-related files for containerization

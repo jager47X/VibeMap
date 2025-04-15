@@ -1,4 +1,5 @@
 import os
+import sys
 import math
 import logging
 import numpy as np
@@ -9,7 +10,10 @@ from pymongo import MongoClient
 from sklearn.manifold import TSNE
 from sklearn.decomposition import PCA
 
-# Import configuration constants
+# Add the project root to sys.path to import config from there.
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+# Import configuration constants from the project root.
 from config import (
     MONGO_URI,
     DB_NAME,
@@ -18,20 +22,26 @@ from config import (
     COLLECTION
 )
 
-# === Plotly Default ===
+# Set default Plotly template
 pio.templates.default = "plotly_white"
 
-# === Logger Setup ===
+# Logger setup
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
 
-# --- Instantiate the Dash App BEFORE layout and callbacks ---
+# --- Instantiate the Dash App ---
+# Using a custom assets folder ("../Data/assets") because the image resides in Data/assets in the project root.
 import dash
 from dash import dcc, html, Input, Output, State, callback_context, no_update
 import dash_bootstrap_components as dbc
 
 external_stylesheets = [dbc.themes.FLATLY]
-app = dash.Dash(__name__, external_stylesheets=external_stylesheets, suppress_callback_exceptions=True)
+app = dash.Dash(
+    __name__,
+    assets_folder="../Data/assets",  # Updated relative path from visualizations/ folder to Data/assets folder.
+    external_stylesheets=external_stylesheets,
+    suppress_callback_exceptions=True
+)
 app.title = "Vibe Map"
 
 # === Data Loading and Processing Functions ===
@@ -290,7 +300,22 @@ app.layout = dbc.Container([
                 html.Div(id="estimated-time", className="text-center"),
                 html.Div(id="loading-message", className="text-center mt-2")
             ])
-        )
+        ),
+        # Big image to fill the rest of the page
+        html.Div(
+            html.Img(
+                src="/assets/logo.png",
+                style={
+                    "width": "100%",         # Fill the container width.
+                    "height": "80vh",         # Set container height.
+                    "objectFit": "contain",   # Ensure the entire image is visible.
+                    "transform": "scale(0.9)",# Optional: scales the image down by 10%
+                    "margin": "auto"          # Center the image if there’s extra space.
+                }
+            ),
+            style={"marginTop": "1rem"}
+        ),
+
     ]),
     # Page content (for the plot) appears here.
     html.Div(id="page-content")
@@ -319,19 +344,19 @@ def update_estimated_time(limit_value, max_itr_value, n_clicks, n_intervals, pat
         max_itr = int(max_itr_value) if max_itr_value is not None else 250
     except ValueError:
         max_itr = 250
-    # New estimated time formula:
+    # New estimated time formula
     computed = math.ceil((limit / 10000) * (max_itr / 5))
     
-    # If the URL is "/" (controls view), reset the countdown.
+    # When in controls view (URL = "/"), reset the countdown.
     if pathname == "/":
         return f"Estimated processing time: {computed} seconds", computed, True, ""
     
-    # If the Generate Plot button has not been pressed, update live.
+    # If generate button hasn't been pressed, update live.
     if n_clicks is None or n_clicks == 0:
         return f"Estimated processing time: {computed} seconds", computed, True, ""
     
     trigger = ctx.triggered[0]["prop_id"] if ctx.triggered else ""
-    # If inputs change after generation, do not reset countdown.
+    # If inputs change after generation, do not reset the countdown.
     if "limit_input" in trigger or "max_itr_input" in trigger:
         return no_update, no_update, no_update, no_update
     
@@ -441,4 +466,3 @@ if __name__ == "__main__":
     url = f"http://127.0.0.1:{port}"
     webbrowser.open(url)
     app.run(debug=False, port=port)
-
