@@ -57,7 +57,7 @@ def score_by_error(true, pred):
 
 def score_vector(y_true, y_pred):
     return np.array([score_by_error(t, p) for t, p in zip(y_true, y_pred)])
-
+logger = setup_logger()
 def load_emotion_prototypes(db):
     """Load one normalized prototype vector per cluster."""
     logger.info("Loading prototypes from %s.%s", DB_NAME, EMOTIONAL_LEVEL_COLLECTION)
