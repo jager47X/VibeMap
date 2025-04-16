@@ -278,7 +278,7 @@ app.layout = dbc.Container([
         ),
         dbc.Row([
             dbc.Col([
-                dbc.Label("Max Records (optional):"),
+                dbc.Label("Max Records (default 100):"),
                 dbc.Input(id="limit_input", type="number", placeholder="Enter max records", min=1)
             ], width=6),
             dbc.Col([
@@ -335,50 +335,78 @@ app.layout = dbc.Container([
     State("remaining_time_store", "data")
 )
 def update_estimated_time(limit_value, max_itr_value, n_clicks, n_intervals, pathname, remaining):
+    from dash import callback_context, no_update
+    import math
+    import dash_bootstrap_components as dbc
+    from dash import html
+
     ctx = callback_context
+    trigger = ctx.triggered[0]["prop_id"] if ctx.triggered else ""
+
     try:
         limit = int(limit_value) if limit_value is not None else 100
     except ValueError:
         limit = 100
+
     try:
         max_itr = int(max_itr_value) if max_itr_value is not None else 250
     except ValueError:
         max_itr = 250
-    # New estimated time formula
+
     computed = math.ceil((limit / 10000) * (max_itr / 5))
-    
-    # When in controls view (URL = "/"), reset the countdown.
+    formatted_time = (
+        f"{computed // 3600}h {computed % 3600 // 60}m {computed % 60}s"
+        if computed >= 3600 else
+        f"{computed // 60}m {computed % 60}s"
+        if computed >= 60 else
+        f"{computed}s"
+    )
+
     if pathname == "/":
-        return f"Estimated processing time: {computed} seconds", computed, True, ""
-    
-    # If generate button hasn't been pressed, update live.
-    if n_clicks is None or n_clicks == 0:
-        return f"Estimated processing time: {computed} seconds", computed, True, ""
-    
-    trigger = ctx.triggered[0]["prop_id"] if ctx.triggered else ""
-    # If inputs change after generation, do not reset the countdown.
+        return f"Estimated processing time: {formatted_time}", computed, True, ""
+
     if "limit_input" in trigger or "max_itr_input" in trigger:
         return no_update, no_update, no_update, no_update
-    
-    if "generate_button" in trigger:
-        spinner = dbc.Spinner(size="sm", color="primary", type="border")
-        return f"Estimated processing time: {computed} seconds", computed, False, spinner
-    
-    # Countdown interval triggered:
-    if remaining is None:
-        remaining = computed
-    new_remaining = max(remaining - 1, 0)
+
     spinner = dbc.Spinner(size="sm", color="primary", type="border")
-    if new_remaining == 0:
-        loading_msg = dbc.Row(
-            dbc.Col(html.Div("Estimation of the time vary on the computer, Taking some time to finalizing the plot...",
-                               className="text-center"), width=12)
+
+    # Case: Generate button clicked
+    if "generate_button" in trigger:
+        return (
+            f"Estimated processing time: {computed} seconds",
+            computed,
+            False,  # Start interval
+            spinner
         )
-        disabled = True
-    else:
-        loading_msg = spinner
-        disabled = False
-    return f"Estimated processing time: {new_remaining} seconds", new_remaining, disabled, loading_msg
+
+    # Case: Countdown in progress
+    if "countdown-interval" in trigger:
+        if remaining is None:
+            return no_update, no_update, True, ""  # Safety fallback
+
+        new_remaining = max(remaining - 1, 0)
+        if new_remaining == 0:
+            msg = dbc.Row(
+                dbc.Col(html.Div(
+                    "Estimation of the time may vary depending on your machine. Finalizing the plot...",
+                    className="text-center"
+                ), width=12)
+            )
+            return (
+                f"Estimated processing time: {new_remaining} seconds",
+                new_remaining,
+                True,  # Disable interval
+                msg
+            )
+        else:
+            return (
+                f"Estimated processing time: {new_remaining} seconds",
+                new_remaining,
+                False,  # Keep counting
+                spinner
+            )
+
+    return f"Estimated processing time: {formatted_time}", computed, True, ""
 
 # --- Callback: Generate Plot and Redirect ---
 @app.callback(
