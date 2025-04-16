@@ -343,6 +343,7 @@ def update_estimated_time(limit_value, max_itr_value, n_clicks, n_intervals, pat
     ctx = callback_context
     trigger = ctx.triggered[0]["prop_id"] if ctx.triggered else ""
 
+    # Parse input values with fallback defaults.
     try:
         limit = int(limit_value) if limit_value is not None else 100
     except ValueError:
@@ -362,27 +363,33 @@ def update_estimated_time(limit_value, max_itr_value, n_clicks, n_intervals, pat
         f"{computed}s"
     )
 
-    if pathname == "/":
-        return f"Estimated processing time: {formatted_time}", computed, True, ""
-
-    if "limit_input" in trigger or "max_itr_input" in trigger:
-        return no_update, no_update, no_update, no_update
-
     spinner = dbc.Spinner(size="sm", color="primary", type="border")
 
-    # Case: Generate button clicked
+    # When no countdown is active (for example, on first load or if no generate button clicked)
+    if remaining is None:
+        # Optionally, if you really want to check the pathname, you can do so here
+        # but only return the default state if no countdown is active.
+        return f"Estimated processing time: {formatted_time}", computed, True, ""
+
+    # If the generate button was clicked, start or reinitialize the countdown.
     if "generate_button" in trigger:
         return (
             f"Estimated processing time: {computed} seconds",
             computed,
-            False,  # Start interval
+            False,  # Enable the countdown interval
             spinner
         )
 
-    # Case: Countdown in progress
+    # If the user modifies input values (limit or max_itr) after the countdown has begun,
+    # you might choose to ignore those changes until the current count is finished.
+    if "limit_input" in trigger or "max_itr_input" in trigger:
+        return no_update, no_update, no_update, no_update
+
+    # Countdown: When the interval fires.
     if "countdown-interval" in trigger:
+        # Ensure we have a valid starting point.
         if remaining is None:
-            return no_update, no_update, True, ""  # Safety fallback
+            remaining = computed
 
         new_remaining = max(remaining - 1, 0)
         if new_remaining == 0:
@@ -393,20 +400,22 @@ def update_estimated_time(limit_value, max_itr_value, n_clicks, n_intervals, pat
                 ), width=12)
             )
             return (
-                f"Estimated processing time: {new_remaining} seconds",
-                new_remaining,
-                True,  # Disable interval
+                f"Estimated processing time: 0 seconds",
+                0,
+                True,  # Disable the interval once finished.
                 msg
             )
         else:
             return (
                 f"Estimated processing time: {new_remaining} seconds",
                 new_remaining,
-                False,  # Keep counting
+                False,  # Continue running the interval.
                 spinner
             )
 
+    # Default behavior (if no relevant trigger is detected)
     return f"Estimated processing time: {formatted_time}", computed, True, ""
+
 
 # --- Callback: Generate Plot and Redirect ---
 @app.callback(

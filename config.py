@@ -5,6 +5,7 @@ DOCUMENT_PATH="./Data/document/tweets.csv" # You can change this to the path of 
 COLLECTION_NAME = "Tweeter_embedding_collection" # You can change this to the name of your collection.
 DOCUMENT_TYPE = "Tweets" # You can change this to the type of document you are using.
 EMOTIONAL_LEVEL_COLLECTION = "Emotion_Level_Mapping"
+LABEL_COLLECTION="Manually_Labeled_Emotions"
 # Mapping from cluster number to its corresponding emotion label.
 EMOTION_LABELS = {
     0: "Very Upset",        # Extreme negative
