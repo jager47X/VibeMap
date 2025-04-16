@@ -8,7 +8,8 @@ Data/k-means
 Data/document
 #html
 Data/visualization_outputs
-
+# batches
+Data/tweet_batches_npz
 # C extensions
 *.so
 
