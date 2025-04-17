@@ -494,6 +494,13 @@ emotion_details:
     EMOTION_LABELS:"Frustrated"
     EMOTION_COLOR:"#FF8C00"
 ```
+## Finding and Note
+#### While enhancing cosine similarity computation using 100 synonyms across 10 emotional levels, and applying both manually labeled data for supervised learning and unsupervised learning (K-Means), the system showed improved accuracy compared to using only basic emotion embeddings like "happy" or embedding[...].
+
+#### However, it struggled to detect sarcasm and passive-aggressive tone, which often require deeper sentence understanding and contextual awareness.
+
+#### Despite having only 100–200 labeled samples, the system is scalable for big data. With each run of the pipeline and the addition of new labels, accuracy gradually improves. Currently, the emotion classification achieves approximately 60–70% accuracy.
+
 
 ---
 

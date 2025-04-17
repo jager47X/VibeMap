@@ -52,7 +52,7 @@ def safe_int(value, default):
 
 
 # -----------------------------------------------------------------
-# Mongo helpers & dimensionality‑reduction pipeline
+# Mongo helpers & dimensionality-reduction pipeline
 # -----------------------------------------------------------------
 
 def load_mongo_data(collection_name: str, limit: int | None = None):
@@ -71,20 +71,22 @@ def load_mongo_data(collection_name: str, limit: int | None = None):
 
 
 def compute_tsne(embeddings: np.ndarray, n_iter: int, random_state: int = 42):
-    logger.info("Running PCA …")
-    pca = PCA(n_components=min(50, embeddings.shape[1]), random_state=random_state)
-    reduced = pca.fit_transform(embeddings)
-
-    logger.info("Running t‑SNE (%d iterations) …", n_iter)
+    logger.info("Running optimized t‑SNE (%d iterations) without PCA preprocessing …", n_iter)
+    
     tsne = TSNE(
         n_components=3,
-        perplexity=30,
+        perplexity=40,            # adjust based on data size
         n_iter=n_iter,
-        init="pca",
+        init="pca",               # internal PCA for better init, even without explicit preprocessing
+        learning_rate="auto",
+        metric="cosine",          # more meaningful for embeddings
+        n_jobs=-1,                # if sklearn version supports it
         random_state=random_state,
         verbose=2,
     )
-    return tsne.fit_transform(reduced)
+    return tsne.fit_transform(embeddings)
+
+
 
 
 def prepare_dataframe(raw_docs: list[dict], n_iter: int):
@@ -123,12 +125,12 @@ def prepare_dataframe(raw_docs: list[dict], n_iter: int):
 # -----------------------------------------------------------------
 
 def build_plot(df: pd.DataFrame) -> go.Figure:
-    logger.info("Building Plotly 3‑D scatter …")
+    logger.info("Building Plotly 3-D scatter …")
 
     df_sorted = df.sort_values("timestamp")
     unique_dates = sorted(df_sorted["time_bucket"].unique())
 
-    # --- Frames (per‑day) ----------------------------------------------------
+    # --- Frames (per-day) ----------------------------------------------------
     frames = []
     for date in unique_dates:
         subset = df_sorted[df_sorted["time_bucket"] == date]
@@ -163,7 +165,7 @@ def build_plot(df: pd.DataFrame) -> go.Figure:
             }
         )
 
-    # All‑time trace & frame ---------------------------------------------------
+    # All-time trace & frame ---------------------------------------------------
     all_trace = go.Scatter3d(
         x=df_sorted["x"],
         y=df_sorted["y"],
@@ -262,7 +264,7 @@ def build_plot(df: pd.DataFrame) -> go.Figure:
     ]
 
     layout = go.Layout(
-        title="3‑D t‑SNE Emotion Map",
+        title="3-D t-SNE Emotion Map",
         scene=dict(
             xaxis=dict(visible=False),
             yaxis=dict(visible=False),
@@ -341,7 +343,7 @@ app.layout = dbc.Container(
                         ),
                         dbc.Col(
                             [
-                                dbc.Label("Max t‑SNE Iterations (min 250):"),
+                                dbc.Label("Max t-SNE Iterations (min 250):"),
                                 dbc.Input(id="max_itr_input", type="number", placeholder="Iterations", min=250, value=250),
                             ],
                             width=6,
@@ -363,7 +365,7 @@ app.layout = dbc.Container(
                     )
                 ),
 
-                # Estimated‑time + spinner -----------------------------------
+                # Estimated-time + spinner -----------------------------------
                 dcc.Loading(
                     id="loading-spinner",
                     type="default",
