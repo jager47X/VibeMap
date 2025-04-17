@@ -1,12 +1,5 @@
 # 🌐VibeMap
-**VibeMap** This project visualizes high-dimensional tweet embeddings using t-SNE, 1-Nearest Neighbor clustering using 10 emotional level, and interactive Plotly 3D scatter plots. It enables users to explore tweet data by username and time through dropdown filters and a time-range slider.    
-
-1. **Prototype Matching** (cosine similarity against 10 emotion centroids)  
-2. **Supervised Learning** (weighted logistic regression on labeled tweets)  
-3. **Unsupervised Residual Correction** (K‑Means on misclassified samples)  
-4. **Generate 3D plot using t-SNE & PCA** Reduce the dimention with PCA first then use t-SNE to visualize the embedding in 3D space.
-5. **Interactive Plotly/Dash 3D Scatter** with username dropdown and time‑range slider  
-
+**VibeMap** VibeMap is an open-sourced sentiment-aware tweet visualizer that performs a scalable sentiment analysis tool that visualizes tweet embeddings in 3D using t-SNE and emotional clustering. This project explores transformer-free encoding pipelines that drastically improve cost-efficiency, training time, and scalability without sacrificing accuracy. It serves as a testbed for research into semi-supervised emotion classification and lightweight sentiment encoding.
 ---
 
 ![logo](Data/assets/logo.png)
