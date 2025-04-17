@@ -2,6 +2,7 @@ import os
 import sys
 import math
 import logging
+
 import numpy as np
 import pandas as pd
 import plotly.io as pio
@@ -10,58 +11,59 @@ from pymongo import MongoClient
 from sklearn.manifold import TSNE
 from sklearn.decomposition import PCA
 
-# Add the project root to sys.path to import config from there.
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+# Dash ------------------------------------------------------------
+import dash
+from dash import dcc, html, Input, Output, State, callback_context, no_update
+import dash_bootstrap_components as dbc
 
-# Import configuration constants from the project root.
+# -----------------------------------------------------------------
+# Make project root importable so we can pull in config.py that sits one level up
+# -----------------------------------------------------------------
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
 from config import (
     MONGO_URI,
     DB_NAME,
     EMOTION_ASSIGNED_TWEETS_COLLECTION,
     EMOTION_COLOR_MAP,
-    COLLECTION,
 )
 
-# Set default Plotly template
+# -----------------------------------------------------------------
+# Global settings
+# -----------------------------------------------------------------
 pio.templates.default = "plotly_white"
 
-# Logger setup
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+)
 logger = logging.getLogger(__name__)
 
-# --- Instantiate the Dash App ---
-import dash
-from dash import (
-    dcc,
-    html,
-    Input,
-    Output,
-    State,
-    callback_context,
-    no_update,
-)
-import dash_bootstrap_components as dbc
+# -----------------------------------------------------------------
+# Utility helpers
+# -----------------------------------------------------------------
 
-external_stylesheets = [dbc.themes.FLATLY]
-app = dash.Dash(
-    __name__,
-    assets_folder="../Data/assets",  # Updated relative path from visualizations/ folder to Data/assets folder.
-    external_stylesheets=external_stylesheets,
-    suppress_callback_exceptions=True,
-)
-app.title = "Vibe Map"
+def safe_int(value, default):
+    """Safely cast *value* to int, otherwise return *default*."""
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
 
-# ================
-# Data helpers
-# ================
 
-def load_mongo_data(collection_name, limit=None):
-    logger.info("Connecting to MongoDB…")
+# -----------------------------------------------------------------
+# Mongo helpers & dimensionality‑reduction pipeline
+# -----------------------------------------------------------------
+
+def load_mongo_data(collection_name: str, limit: int | None = None):
+    logger.info("Connecting to MongoDB …")
     client = MongoClient(MONGO_URI)
     db = client[DB_NAME]
+
     cursor = db[collection_name].find()
     if limit:
         cursor = cursor.limit(limit)
+
     data = list(cursor)
     logger.info("Loaded %d documents from '%s'", len(data), collection_name)
     client.close()
@@ -69,11 +71,11 @@ def load_mongo_data(collection_name, limit=None):
 
 
 def compute_tsne(embeddings: np.ndarray, n_iter: int, random_state: int = 42):
-    """PCA‑>t‑SNE helper so we can visualise quickly"""
-    logger.info("Performing PCA…")
+    logger.info("Running PCA …")
     pca = PCA(n_components=min(50, embeddings.shape[1]), random_state=random_state)
     reduced = pca.fit_transform(embeddings)
-    logger.info("Running t‑SNE…")
+
+    logger.info("Running t‑SNE (%d iterations) …", n_iter)
     tsne = TSNE(
         n_components=3,
         perplexity=30,
@@ -85,47 +87,51 @@ def compute_tsne(embeddings: np.ndarray, n_iter: int, random_state: int = 42):
     return tsne.fit_transform(reduced)
 
 
-def prepare_dataframe(data, max_itr_input=1000):
-    embeddings = np.asarray([d["embeddings"] for d in data])
-    tsne_coords = compute_tsne(embeddings, max_itr_input)
+def prepare_dataframe(raw_docs: list[dict], n_iter: int):
+    """Return a tidy DataFrame ready for Plotly."""
+    embeddings = np.array([d["embeddings"] for d in raw_docs])
+    coords = compute_tsne(embeddings, n_iter)
 
     records = []
-    for idx, (doc, coord) in enumerate(zip(data, tsne_coords)):
+    for idx, (doc, coord) in enumerate(zip(raw_docs, coords)):
         emotion = doc.get("emotion_details", {}).get("EMOTION_LABELS", "unknown")
         cluster = doc.get("emotion_details", {}).get("assigned_cluster", "N/A")
-        record = {
-            "index": idx,
-            "title": doc.get("title", f"Document {idx}"),
-            "tweets": doc.get("tweets", ""),
-            "username": doc.get("username", "unknown").strip().lower(),
-            "timestamp": pd.to_datetime(doc.get("timestamp", None), errors="coerce"),
-            "emotion": emotion,
-            "cluster": cluster,
-            "x": coord[0],
-            "y": coord[1],
-            "z": coord[2],
-        }
-        records.append(record)
+        records.append(
+            {
+                "index": idx,
+                "title": doc.get("title", f"Document {idx}"),
+                "tweets": doc.get("tweets", ""),
+                "username": doc.get("username", "unknown").strip().lower(),
+                "timestamp": pd.to_datetime(doc.get("timestamp"), errors="coerce"),
+                "emotion": emotion,
+                "cluster": cluster,
+                "x": coord[0],
+                "y": coord[1],
+                "z": coord[2],
+            }
+        )
 
-    df = pd.DataFrame.from_records(records)
+    df = pd.DataFrame(records)
     df.dropna(subset=["timestamp"], inplace=True)
     df["time_bucket"] = df["timestamp"].dt.strftime("%Y-%m-%d")
     logger.info("Prepared DataFrame with %d rows", len(df))
     return df
 
 
-# -------------
-# Build 3‑D fig
-# -------------
+# -----------------------------------------------------------------
+# Build Plotly figure
+# -----------------------------------------------------------------
 
-def build_plot(df: pd.DataFrame):
-    logger.info("Building animated 3‑D plot…")
-    df = df.sort_values("timestamp")
-    unique_dates = sorted(df["time_bucket"].unique())
+def build_plot(df: pd.DataFrame) -> go.Figure:
+    logger.info("Building Plotly 3‑D scatter …")
 
+    df_sorted = df.sort_values("timestamp")
+    unique_dates = sorted(df_sorted["time_bucket"].unique())
+
+    # --- Frames (per‑day) ----------------------------------------------------
     frames = []
     for date in unique_dates:
-        subset = df[df["time_bucket"] == date]
+        subset = df_sorted[df_sorted["time_bucket"] == date]
         frames.append(
             {
                 "name": date,
@@ -147,7 +153,7 @@ def build_plot(df: pd.DataFrame):
                         ),
                         hovertemplate=(
                             "<b>Title:</b> %{text}<br>"
-                            "<b>Username:</b> %{customdata[0]}<br>"
+                            "<b>User:</b> %{customdata[0]}<br>"
                             "<b>Time:</b> %{customdata[1]}<br>"
                             "<b>Tweet:</b> %{customdata[2]}<extra></extra>"
                         ),
@@ -157,87 +163,127 @@ def build_plot(df: pd.DataFrame):
             }
         )
 
-    # “All‑time” baseline frame
-    base_trace = go.Scatter3d(
-        x=df["x"],
-        y=df["y"],
-        z=df["z"],
+    # All‑time trace & frame ---------------------------------------------------
+    all_trace = go.Scatter3d(
+        x=df_sorted["x"],
+        y=df_sorted["y"],
+        z=df_sorted["z"],
         mode="markers",
-        marker=dict(color=df["emotion"].map(EMOTION_COLOR_MAP)),
-        text=df["title"],
+        marker=dict(color=df_sorted["emotion"].map(EMOTION_COLOR_MAP)),
+        text=df_sorted["title"],
         customdata=np.stack(
-            [df["username"], df["timestamp"].astype(str), df["tweets"]], axis=-1
+            [
+                df_sorted["username"],
+                df_sorted["timestamp"].astype(str),
+                df_sorted["tweets"],
+            ],
+            axis=-1,
         ),
         hovertemplate=(
             "<b>Title:</b> %{text}<br>"
-            "<b>Username:</b> %{customdata[0]}<br>"
+            "<b>User:</b> %{customdata[0]}<br>"
             "<b>Time:</b> %{customdata[1]}<br>"
             "<b>Tweet:</b> %{customdata[2]}<extra></extra>"
         ),
         showlegend=False,
     )
-    all_time_frame = {"name": "ALL TIME", "data": [base_trace]}
 
-    steps = [
+    all_frame = {"name": "ALL TIME", "data": [all_trace]}
+
+    # Slider steps -------------------------------------------------------------
+    slider_steps = [
         {
-            "args": [[frame["name"]], {"frame": {"duration": 500, "redraw": True}, "mode": "immediate"}],
-            "label": frame["name"],
+            "args": [[all_frame["name"]], {"frame": {"duration": 400, "redraw": True}}],
+            "label": "ALL TIME",
             "method": "animate",
         }
-        for frame in [all_time_frame] + frames
+    ] + [
+        {
+            "args": [[f["name"]], {"frame": {"duration": 400, "redraw": True}}],
+            "label": f["name"],
+            "method": "animate",
+        }
+        for f in frames
     ]
 
-    usernames = sorted(df["username"].unique())
-    emotions = sorted(df["emotion"].unique())
+    # Username & emotion dropdowns --------------------------------------------
+    usernames = sorted(df_sorted["username"].unique())
+    emotions = sorted(df_sorted["emotion"].unique())
 
-    def _btn(label, _df):
+    def make_restyle_button(label, mask):
+        filt = df_sorted[mask]
         return {
             "label": label,
             "method": "restyle",
             "args": [
                 {
-                    "x": [_df["x"]],
-                    "y": [_df["y"]],
-                    "z": [_df["z"]],
-                    "text": [_df["title"]],
+                    "x": [filt["x"]],
+                    "y": [filt["y"]],
+                    "z": [filt["z"]],
+                    "text": [filt["title"]],
                     "customdata": [
-                        np.stack([
-                            _df["username"],
-                            _df["timestamp"].astype(str),
-                            _df["tweets"],
-                        ], axis=-1)
+                        np.stack(
+                            [
+                                filt["username"],
+                                filt["timestamp"].astype(str),
+                                filt["tweets"],
+                            ],
+                            axis=-1,
+                        )
                     ],
-                    "marker.color": [_df["emotion"].map(EMOTION_COLOR_MAP)],
+                    "marker.color": [filt["emotion"].map(EMOTION_COLOR_MAP)],
                 }
             ],
         }
 
-    username_buttons = [_btn("All Users", df)] + [_btn(user, df[df["username"] == user]) for user in usernames]
-    emotion_buttons = [_btn("All Emotions", df)] + [_btn(e, df[df["emotion"] == e]) for e in emotions]
+    username_buttons = [
+        make_restyle_button("All Users", slice(None))
+    ] + [
+        make_restyle_button(u, df_sorted["username"] == u) for u in usernames
+    ]
 
-    emotion_legend_annotations = [
+    emotion_buttons = [
+        make_restyle_button("All Emotions", slice(None))
+    ] + [
+        make_restyle_button(e, df_sorted["emotion"] == e) for e in emotions
+    ]
+
+    # Emotion legend (text with color) ----------------------------------------
+    legend_ann = [
         {
             "x": 1.15,
             "y": 0.9 - 0.05 * i,
             "xref": "paper",
             "yref": "paper",
-            "text": f'<span style="color:{EMOTION_COLOR_MAP[e]};"><b>{e}</b></span>',
+            "text": f'<span style="color:{EMOTION_COLOR_MAP[e]}"><b>{e}</b></span>',
             "showarrow": False,
-            "font": {"size": 12},
         }
-        for i, e in enumerate(EMOTION_COLOR_MAP)
+        for i, e in enumerate(EMOTION_COLOR_MAP.keys())
     ]
 
     layout = go.Layout(
-        title=f"3‑D t‑SNE Emotion Visualisation of {COLLECTION[0]['document_type']}",
+        title="3‑D t‑SNE Emotion Map",
+        scene=dict(
+            xaxis=dict(visible=False),
+            yaxis=dict(visible=False),
+            zaxis=dict(visible=False),
+            aspectmode="cube",
+        ),
+        sliders=[
+            {
+                "active": 0,
+                "x": 0.01,
+                "currentvalue": {"prefix": "Date: "},
+                "pad": {"t": 40},
+                "steps": slider_steps,
+            }
+        ],
         updatemenus=[
             {
                 "buttons": username_buttons,
                 "direction": "down",
                 "x": 1.02,
                 "y": 1.03,
-                "xanchor": "left",
-                "yanchor": "top",
                 "showactive": True,
             },
             {
@@ -245,69 +291,79 @@ def build_plot(df: pd.DataFrame):
                 "direction": "down",
                 "x": 1.20,
                 "y": 1.03,
-                "xanchor": "left",
-                "yanchor": "top",
                 "showactive": True,
             },
         ],
-        sliders=[
-            {
-                "active": 0,
-                "x": 0.01,
-                "currentvalue": {"prefix": "Date: "},
-                "pad": {"t": 40},
-                "steps": steps,
-            }
-        ],
-        scene=dict(
-            xaxis=dict(visible=False),
-            yaxis=dict(visible=False),
-            zaxis=dict(visible=False),
-            aspectmode="cube",
-        ),
-        annotations=emotion_legend_annotations,
-        margin=dict(l=0, r=0, t=80, b=0),
-        paper_bgcolor="white",
-        font=dict(color="black"),
+        margin={"l": 0, "r": 0, "t": 80, "b": 0},
+        annotations=legend_ann,
     )
 
-    return go.Figure(data=all_time_frame["data"], layout=layout, frames=[all_time_frame] + frames)
+    fig = go.Figure(data=all_frame["data"], layout=layout, frames=[all_frame] + frames)
+    return fig
 
 
-# =============================
-#     LAYOUT
-# =============================
+# -----------------------------------------------------------------
+# Dash app & layout
+# -----------------------------------------------------------------
+external_stylesheets = [dbc.themes.FLATLY]
+app = dash.Dash(
+    __name__,
+    assets_folder="../Data/assets",  # relative to this file
+    external_stylesheets=external_stylesheets,
+    suppress_callback_exceptions=True,
+)
+app.title = "Vibe Map"
+
 app.layout = dbc.Container(
     [
         dcc.Location(id="url", refresh=False),
+        dcc.Interval(id="countdown-interval", interval=1_000, n_intervals=0, disabled=True),
         dcc.Store(id="remaining_time_store"),
         dcc.Store(id="plot_store"),
-        dcc.Interval(id="countdown-interval", interval=1000, disabled=True),
 
-        # Controls
+        # Headline ------------------------------------------------------------
+        dbc.Row(
+            dbc.Col(html.H1("Vibe Map", className="text-center my-4"), width=12)
+        ),
+
+        # Controls ------------------------------------------------------------
         html.Div(
             id="controls-container",
             children=[
-                dbc.Row(dbc.Col(html.H1("Vibe Map", className="text-center my-4"))),
                 dbc.Row(
                     [
-                        dbc.Col([
-                            dbc.Label("Max Records (default 100):"),
-                            dbc.Input(id="limit_input", type="number", min=1),
-                        ], width=6),
-                        dbc.Col([
-                            dbc.Label("Max t-SNE Iterations (min 250):"),
-                            dbc.Input(id="max_itr_input", type="number", min=250, value=250),
-                        ], width=6),
+                        dbc.Col(
+                            [
+                                dbc.Label("Max Records (default 100):"),
+                                dbc.Input(id="limit_input", type="number", placeholder="Records", min=1),
+                            ],
+                            width=6,
+                        ),
+                        dbc.Col(
+                            [
+                                dbc.Label("Max t‑SNE Iterations (min 250):"),
+                                dbc.Input(id="max_itr_input", type="number", placeholder="Iterations", min=250, value=250),
+                            ],
+                            width=6,
+                        ),
                     ],
-                    className="mb-3",
+                    class_name="mb-3",
                 ),
                 dbc.Row(
                     dbc.Col(
-                        dbc.Button("Generate Plot", id="generate_button", color="primary", n_clicks=0),
-                        className="d-flex justify-content-center",
+                        dbc.Button(
+                            "Generate Plot",
+                            id="generate_button",
+                            color="primary",
+                            class_name="mb-3",
+                            n_clicks=0,
+                        ),
+                        width="auto",
+                        class_name="d-flex justify-content-center",
                     )
                 ),
+
+                # Estimated‑time + spinner -----------------------------------
                 dcc.Loading(
                     id="loading-spinner",
                     type="default",
@@ -318,7 +374,8 @@ app.layout = dbc.Container(
                         ]
                     ),
                 ),
-                # Decorative image
+
+                # Logo filler -------------------------------------------------
                 html.Div(
                     html.Img(
                         src="/assets/logo.png",
@@ -334,15 +391,18 @@ app.layout = dbc.Container(
                 ),
             ],
         ),
+
+        # Page content (plot) --------------------------------------------------
         html.Div(id="page-content"),
     ],
     fluid=True,
 )
 
-# =========================================================
-#   Callback: Estimated time + countdown spinner            
-# =========================================================
-app.callback(
+
+# -----------------------------------------------------------------
+# Callback: Estimated time & countdown
+# -----------------------------------------------------------------
+@app.callback(
     Output("estimated-time", "children"),
     Output("remaining_time_store", "data"),
     Output("countdown-interval", "disabled"),
@@ -352,127 +412,73 @@ app.callback(
     Input("max_itr_input", "value"),
     Input("generate_button", "n_clicks"),
     Input("countdown-interval", "n_intervals"),
-    Input("url", "pathname"),
     State("remaining_time_store", "data"),
-)(
-    lambda limit_value, max_itr_value, n_clicks, n_intervals, pathname, remaining: _update_timer(
-        limit_value,
-        max_itr_value,
-        n_clicks,
-        n_intervals,
-        pathname,
-        remaining,
-    )
+    prevent_initial_call=True,
 )
+def update_estimated_time(limit_value, max_itr_value, n_clicks, n_intervals, remaining):
+    limit = safe_int(limit_value, 100)
+    max_itr = max(250, safe_int(max_itr_value, 250))
+    total_seconds = max(1, math.ceil((limit / 10_000) * (max_itr / 5)))
 
+    spinner = html.Div(
+        dbc.Spinner(size="sm", color="primary", type="border"),
+        className="text-center mt-2",
+    )
 
-def _update_timer(limit_value, max_itr_value, n_clicks, n_intervals, pathname, remaining):
-    """Keeps the timer / spinner in sync with user input and backend status."""
-    from dash import html
-    import dash_bootstrap_components as dbc
+    ctx = callback_context
+    trigger = ctx.triggered[0]["prop_id"].split(".")[0] if ctx.triggered else ""
 
-    ctx_prop = callback_context.triggered[0]["prop_id"] if callback_context.triggered else ""
-
-    # 1️⃣ Normalise user input ---------------------------------------------
-    try:
-        limit = int(limit_value) if limit_value else 100
-    except (TypeError, ValueError):
-        limit = 100
-
-    try:
-        max_itr = int(max_itr_value) if max_itr_value else 250
-        if max_itr < 250:
-            max_itr = 250
-    except (TypeError, ValueError):
-        max_itr = 250
-
-    est_seconds = max(1, math.ceil((limit / 10000) * (max_itr / 5)))
-
-    def _fmt(sec: int):
-        if sec >= 3600:
-            return f"{sec // 3600}h {sec % 3600 // 60}m {sec % 60}s"
-        if sec >= 60:
-            return f"{sec // 60}m {sec % 60}s"
-        return f"{sec}s"
-
-    spinner = dbc.Spinner(size="sm", color="primary", type="border")
-
-    # 2️⃣ Auto‑cancel once we are on /plot (backend finished) ---------------
-    if pathname == "/plot":
+    # Generate pressed -------------------------------------------------------
+    if trigger == "generate_button":
         return (
-            "Estimated processing time: 0s",
-            0,
-            True,
-            0,
-            html.Div("Plot finished ✅", className="text-center text-success"),
-        )
-
-    # Are we currently counting down?
-    active = isinstance(remaining, (int, float)) and remaining > 0
-
-    # 3️⃣ Handle Generate click -------------------------------------------
-    if "generate_button" in ctx_prop:
-        return (
-            f"Estimated processing time: {_fmt(est_seconds)}",
-            est_seconds,
+            f"Estimated processing time: {total_seconds} seconds",
+            total_seconds,
             False,  # enable interval
-            0,       # reset n_intervals so the timer starts from scratch
+            0,      # reset interval counter
             spinner,
         )
 
-    # 4️⃣ Handle countdown tick -------------------------------------------
-    if "countdown-interval" in ctx_prop and active:
-        try:
-            remaining_int = int(remaining)
-        except (TypeError, ValueError):
-            remaining_int = est_seconds
-        remaining_int = max(remaining_int - 1, 0)
+    # Interval tick ----------------------------------------------------------
+    if trigger == "countdown-interval":
+        if remaining is None:
+            return no_update, no_update, True, 0, no_update
 
-        if remaining_int == 0:
+        seconds_left = max(int(remaining) - 1, 0)
+
+        if seconds_left == 0:
+            done_msg = html.Div(
+                "Estimation may vary by machine. Finalizing the plot…",
+                className="text-center mt-2",
+            )
             return (
-                "Estimated processing time: 0s",
+                "Estimated processing time: 0 seconds",
                 0,
-                True,  # stop interval
-                n_intervals,  # keep the tick count as‑is
-                html.Div(
-                    "Finalising the plot…", className="text-center text-secondary"
-                ),
-            )
-        else:
-            return (
-                f"Estimated processing time: {_fmt(remaining_int)}",
-                remaining_int,
-                False,
-                n_intervals,
-                spinner,
+                True,
+                0,
+                done_msg,
             )
 
-    # 5️⃣ Re‑compute estimate when inputs change & no run active -----------
-    if ("limit_input" in ctx_prop or "max_itr_input" in ctx_prop) and not active:
         return (
-            f"Estimated processing time: {_fmt(est_seconds)}",
-            None,
-            True,
-            0,
-            "",
+            f"Estimated processing time: {seconds_left} seconds",
+            seconds_left,
+            False,
+            no_update,
+            spinner,
         )
 
-    # 6️⃣ Default (first page load) ---------------------------------------
-    if not active:
-        return (
-            f"Estimated processing time: {_fmt(est_seconds)}",
-            None,
-            True,
-            0,
-            "",
-        )
-
-    return no_update, no_update, no_update, no_update, no_update
+    # Limit / iteration changed while idle -----------------------------------
+    return (
+        f"Estimated processing time: {total_seconds} seconds",
+        None,
+        True,
+        0,
+        "",
+    )
 
 
-# =========================================================
-#   Callback: generate → plot_store + redirect             
-# =========================================================
+# -----------------------------------------------------------------
+# Callback: Generate plot & redirect
+# -----------------------------------------------------------------
 @app.callback(
     Output("plot_store", "data"),
     Output("url", "pathname"),
@@ -485,51 +491,32 @@ def generate_and_redirect(n_clicks, limit_value, max_itr_value):
     if not n_clicks:
         raise dash.exceptions.PreventUpdate
 
-    # Sanitize inputs
-    try:
-        limit = int(limit_value) if limit_value else 100
-    except (TypeError, ValueError):
-        limit = 100
+    limit = safe_int(limit_value, 100)
+    max_itr = max(250, safe_int(max_itr_value, 250))
 
-    try:
-        max_itr = int(max_itr_value) if max_itr_value else 250
-        if max_itr < 250:
-            max_itr = 250
-    except (TypeError, ValueError):
-        max_itr = 250
+    docs = load_mongo_data(EMOTION_ASSIGNED_TWEETS_COLLECTION, limit)
+    if not docs:
+        logger.warning("No documents found – staying on landing page.")
+        return None, "/"
 
-    data = load_mongo_data(EMOTION_ASSIGNED_TWEETS_COLLECTION, limit)
-    if not data:
-        logger.warning("No data loaded – staying on home page")
-        return no_update, "/"
-
-    df = prepare_dataframe(data, max_itr)
+    df = prepare_dataframe(docs, max_itr)
     fig = build_plot(df)
 
-    # Immediately save figure → skips extra waiting on frontend
     return fig.to_plotly_json(), "/plot"
 
 
-# =========================================================
-#   Hide controls once the graph page loads                 
-# =========================================================
+# -----------------------------------------------------------------
+# Callbacks: Show / hide controls & render page content
+# -----------------------------------------------------------------
 @app.callback(Output("controls-container", "style"), Input("url", "pathname"))
-def toggle_controls(path):
-    return {"display": "none"} if path == "/plot" else {"display": "block"}
+def toggle_controls(pathname):
+    return {"display": "none"} if pathname == "/plot" else {"display": "block"}
 
 
-# =========================================================
-#   Render page‑specific content                            
-# =========================================================
-@app.callback(
-    Output("page-content", "children"),
-    Input("url", "pathname"),
-    State("plot_store", "data"),
-)
-
-def render_page(path, plot_data):
-    if path == "/plot" and plot_data:
-        fig = go.Figure(plot_data)
+@app.callback(Output("page-content", "children"), Input("url", "pathname"), State("plot_store", "data"))
+def render_page(pathname, plot_json):
+    if pathname == "/plot" and plot_json is not None:
+        fig = go.Figure(plot_json)
         return html.Div(
             [
                 dbc.Row(
@@ -544,35 +531,39 @@ def render_page(path, plot_data):
                         className="text-center",
                     )
                 ),
-                dcc.Graph(id="tsne-3d-graph", figure=fig, config={"displayModeBar": False}, style={"height": "100vh"}),
-                html.Div("Plot generation is completed", className="text-center mt-2"),
+                dcc.Graph(
+                    id="tsne-3d-graph",
+                    figure=fig,
+                    config={"displayModeBar": False},
+                    style={"height": "100vh", "width": "100%"},
+                ),
+                html.Div(
+                    "Plot generation completed",
+                    className="text-center mt-3",
+                ),
             ]
         )
     return ""
 
 
-# =========================================================
-#   Regenerate button → go home                             
-# =========================================================
+# -----------------------------------------------------------------
+# Callback: regenerate button → redirect to landing
+# -----------------------------------------------------------------
 @app.callback(
     Output("url", "pathname", allow_duplicate=True),
     Input("regenerate_button", "n_clicks"),
     prevent_initial_call=True,
 )
-
-def regenerate(n_clicks):
-    if n_clicks:
-        return "/"
-    return no_update
+def regenerate(n):
+    return "/" if n else no_update
 
 
-# =========================================================
-#   Run                                                     
-# =========================================================
+# -----------------------------------------------------------------
+# Main entry point – open browser & run server
+# -----------------------------------------------------------------
 if __name__ == "__main__":
     import webbrowser
 
     port = 8050
-    url = f"http://127.0.0.1:{port}"
-    webbrowser.open(url)
+    webbrowser.open(f"http://127.0.0.1:{port}")
     app.run(debug=False, port=port)
