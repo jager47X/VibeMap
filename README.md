@@ -1,5 +1,6 @@
 # 🌐VibeMap
-**VibeMap** VibeMap is an open-sourced sentiment-aware tweet visualizer that performs a scalable sentiment analysis tool that visualizes tweet embeddings in 3D using t-SNE and emotional clustering. This project explores transformer-free encoding pipelines that drastically improve cost-efficiency, training time, and scalability without sacrificing accuracy. It serves as a testbed for research into semi-supervised emotion classification and lightweight sentiment encoding.
+**VibeMap** 
+> VibeMap is an open-sourced sentiment-aware tweet visualizer that performs a scalable sentiment analysis tool that visualizes tweet embeddings in 3D using t-SNE and emotional clustering. This project explores transformer-free encoding pipelines that drastically improve cost-efficiency, training time, and scalability without sacrificing accuracy. It serves as a testbed for research into semi-supervised emotion classification and lightweight sentiment encoding.
 ---
 
 ![logo](Data/assets/logo.png)
